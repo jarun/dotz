@@ -2,19 +2,18 @@
 
 Render image and video previews as Braille and ASCII art in the terminal with xterm-256 color and ncurses dim/normal/bold attributes.
 
-It was written to be used as a terminal image viewer with [`nnn`](https://github.com/jarun/nnn). Works independently too.
+Initially written for [`nnn`](https://github.com/jarun/nnn), it evolved as an independent feature-rich project.
 
 ## Features
 
-- Braille art rendering for images
+- Braille art rendering for image and video previews
+- Video playback with seek controls
 - ASCII density fallback mode (for terminals without Braille font support)
-- Thumbnail previews
+- Thumbnail gallery with navigation
 - Animated GIF support
 - xterm-256 color and grayscale
 - Dithering options (ordered, error diffusion, atkinson)
 - Automatic aspect ratio correction for both Braille and ASCII modes
-- Video preview (frame extraction with ffmpeg)
-- Video playback with seek controls
 - File metadata panel
 - Zoom in, zoom out, pan while zoom
 - Rotate clockwise, flip horizontally
