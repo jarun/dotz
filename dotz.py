@@ -11,7 +11,7 @@ import sys
 import os
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageEnhance, ImageFilter
 
 _VERSION_ = "0.2"
 _AUTHOR_ = "Arun Prakash Jana"
@@ -37,6 +37,7 @@ VIDEO_PLAYBACK_DEFAULT_FPS = 5
 VIDEO_PLAYBACK_BUFFER_FRAMES = 4
 VIDEO_DECODE_THREADS = max(1, min(4, (os.cpu_count() or 1) // VIDEO_PLAYBACK_BUFFER_FRAMES))
 STATUS_LINE_COUNT = 2
+IMAGE_BRIGHTNESS = 1.2
 
 # Ordered dither matrix for the 4×2 braille grid.
 BAYER_4x2 = np.array([
@@ -138,8 +139,8 @@ def _load_image(image_path, img_w, img_h, sharpen, color, rotation_quadrants=0, 
             img.seek(frame_idx)
             durations.append(img.info.get("duration", 100))
         frame = _transform_image(img, rotation_quadrants, flip_horizontal)
-        img_rgb = frame.convert("RGB") if color else None
-        img_grey = img_rgb.convert("L") if color else frame.convert("L")
+        img_rgb = ImageEnhance.Brightness(frame.convert("RGB")).enhance(IMAGE_BRIGHTNESS) if color else None
+        img_grey = img_rgb.convert("L") if color else ImageEnhance.Brightness(frame.convert("L")).enhance(IMAGE_BRIGHTNESS)
         img_aspect = img_grey.width / img_grey.height
         # Apply aspect correction for ASCII mode
         effective_aspect = img_aspect * aspect_correction
