@@ -381,6 +381,9 @@ _HELP_LINES = (
     "SLIDESHOW",
     "  s / S          forward / reverse",
     "  d / D          delay down / up by 1 sec",
+    "THUMBNAILS",
+    "  t / T          4 / 9 thumbnails",
+    "  Enter          toggle thumbnails / image",
     "INFO & QUIT",
     "  i metadata     ? help     q / Esc quit",
 )
@@ -419,7 +422,7 @@ def _show_metadata_panel(stdscr, lines):
 
 
 def _show_help_panel(stdscr):
-    _show_panel(stdscr, "Help", _HELP_LINES, emphasized_rows=(0, 4, 8, 13, 16))
+    _show_panel(stdscr, "Help", _HELP_LINES, emphasized_rows=(0, 4, 8, 13, 16, 19))
 
 
 def _prepare_render_item(image_item, img_w, img_h, sharpen, color, seek, extractformat, rotation_quadrants=0, flip_horizontal=False, dither_mode="ordered", keyframes_only=False, ascii_mode=False):
@@ -871,6 +874,74 @@ def render(stdscr, image_files, idx, sharpen, dither_mode, color, wait_time=5, s
     return key
 
 
+THUMBNAILS_DEFAULT = 4
+THUMBNAILS_CHOICES = (4, 9)
+_ENTER_KEYS = (10, 13, curses.KEY_ENTER)
+
+
+def _thumbnail_layout(count, max_y, max_x):
+    """Return (grid_cols, grid_rows, cell_w, cell_h, thumb_w, thumb_h) or None if the terminal is too small."""
+    grid_cols = grid_rows = 3 if count == 9 else 2
+    cell_w = max_x // grid_cols
+    cell_h = (max_y - STATUS_LINE_COUNT) // grid_rows
+    thumb_h = cell_h - 1  # last row of a cell holds the caption
+    if cell_w < 2 or thumb_h < 1:
+        return None
+    return grid_cols, grid_rows, cell_w, cell_h, cell_w, thumb_h
+
+
+class _OffsetWindow:
+    """Translate addstr coordinates so a thumbnail can be drawn into a screen region."""
+
+    def __init__(self, win, y, x):
+        self.win, self.y, self.x = win, y, x
+
+    def addstr(self, y, x, text, attr=0):
+        self.win.addstr(self.y + y, self.x + x, text, attr)
+
+
+def render_thumbnails(stdscr, page_names, page_prepared, selected, layout, page, page_count, total, idx, color, ascii_mode):
+    """Draw one page of thumbnails and block for a key press."""
+    curses.curs_set(0)
+    curses.use_default_colors()
+    color_pair_attrs = None
+    if color:
+        curses.start_color()
+        color_pair_attrs = _init_color_pairs()
+    grid_cols, _, cell_w, cell_h, thumb_w, thumb_h = layout
+    max_y, max_x = stdscr.getmaxyx()
+    stdscr.erase()
+    for slot, (name, prepared) in enumerate(zip(page_names, page_prepared)):
+        row, col = divmod(slot, grid_cols)
+        y0, x0 = row * cell_h, col * cell_w
+        if prepared is not None:
+            frame = prepared["frames"][0]
+            if ascii_mode:
+                blocks = frame.reshape(thumb_h, 2, thumb_w, 2)
+                char_rows = _blocks_to_chars(blocks, ascii_mode=True)
+            else:
+                blocks = None
+                char_rows = prepared["braille_rows"][0]
+            color_map = prepared["color_maps"][0]
+            _draw_braille_rows(_OffsetWindow(stdscr, y0, x0), thumb_h, thumb_w, blocks, prepared["block_means"][0], None,
+                               color_map, color, color_pair_attrs, False, False, char_rows)
+        try:
+            attr = curses.A_REVERSE if slot == selected else curses.A_NORMAL
+            stdscr.addnstr(y0 + thumb_h, x0, name.ljust(cell_w - 1), cell_w - 1, attr)
+        except curses.error:
+            pass
+    try:
+        status_y = max_y - STATUS_LINE_COUNT
+        width = max(0, max_x - 1)
+        stdscr.addnstr(status_y, 0, f"[{idx + 1}/{total}] {page_names[selected]}", width, curses.A_REVERSE)
+        stdscr.addnstr(status_y + 1, 0, f"thumbnails | page {page + 1}/{page_count} | Enter: open image", width, curses.A_REVERSE)
+    except curses.error:
+        pass
+    stdscr.refresh()
+    stdscr.nodelay(False)
+    return stdscr.getch()
+
+
 def main():
     class ExtendedArgumentParser(argparse.ArgumentParser):
         @staticmethod
@@ -902,6 +973,8 @@ def main():
     parser.add_argument("-f", "--format", type=str, choices=["jpeg", "png"], default="jpeg", help="Format for extracted video frames: jpeg (default) or png")
     parser.add_argument("-F", "--fps", type=int, choices=range(5, 11), default=VIDEO_PLAYBACK_DEFAULT_FPS,
                         help="Video playback frame rate between 5 and 10 FPS (default: 5)")
+    parser.add_argument("-t", "--thumbnails", nargs="?", const=THUMBNAILS_DEFAULT, type=int, choices=THUMBNAILS_CHOICES, metavar="N",
+                        help=f"Show N thumbnails per page: 4 (2x2) or 9 (3x3), default: {THUMBNAILS_DEFAULT}; press Enter to open an image.")
     parser.add_argument("-v", "--version", action="version", version=_VERSION_)
     args = parser.parse_args()
 
@@ -1127,6 +1200,23 @@ def main():
         flip_horizontal = False
         last_rendered_idx = idx
         discard_queued_key = None
+        thumb_mode = args.thumbnails is not None
+        thumb_count = args.thumbnails or THUMBNAILS_DEFAULT
+        thumb_cache = {}
+        thumb_futures = {}
+        thumb_dither = dither_mode if dither_mode in ("ordered", "none") else "ordered"
+
+        def prepare_thumb_page(page, count, thumb_w, thumb_h):
+            block_h = 2 if args.ascii else 4
+            items = []
+            for i in range(page * count, min(n, (page + 1) * count)):
+                try:
+                    items.append(_prepare_render_item(image_files[i], thumb_w * 2, thumb_h * block_h, sharpen, color, args.seek,
+                                                      args.format, 0, False, thumb_dither, True, ascii_mode=args.ascii))
+                except Exception:
+                    items.append(None)
+            return items
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             while True:
                 if idx != last_rendered_idx:
@@ -1138,6 +1228,63 @@ def main():
                     flip_horizontal = False
                     video_playback_active = False
                     last_rendered_idx = idx
+
+                if thumb_mode:
+                    max_y, max_x = stdscr.getmaxyx()
+                    layout = _thumbnail_layout(thumb_count, max_y, max_x)
+                    if layout is None:
+                        stdscr.erase()
+                        try:
+                            stdscr.addstr(0, 0, "Terminal too small")
+                        except curses.error:
+                            pass
+                        stdscr.refresh()
+                        stdscr.nodelay(False)
+                        if stdscr.getch() in (ord('q'), 27):
+                            break
+                        continue
+                    thumb_w, thumb_h = layout[4], layout[5]
+                    page = idx // thumb_count
+                    thumb_pages = -(-n // thumb_count)
+                    wanted = {(p, thumb_count, thumb_w, thumb_h) for p in ((page + d) % thumb_pages for d in (0, 1, -1))}
+                    for stale in [k for k in thumb_cache if k not in wanted]:
+                        del thumb_cache[stale]
+                    for stale in [k for k in thumb_futures if k not in wanted]:
+                        thumb_futures.pop(stale).cancel()
+                    current_key = (page, thumb_count, thumb_w, thumb_h)
+                    for wanted_key in [current_key] + [k for k in wanted if k != current_key]:
+                        if wanted_key not in thumb_cache and wanted_key not in thumb_futures:
+                            thumb_futures[wanted_key] = executor.submit(prepare_thumb_page, *wanted_key)
+                    for done_key, future in list(thumb_futures.items()):
+                        if done_key != current_key and future.done():
+                            del thumb_futures[done_key]
+                            if not future.cancelled() and future.exception() is None:
+                                thumb_cache[done_key] = future.result()
+                    if current_key not in thumb_cache:
+                        thumb_cache[current_key] = thumb_futures.pop(current_key).result()
+                    first = page * thumb_count
+                    page_prepared = thumb_cache[current_key]
+                    page_names = [os.path.basename(str(image_files[i])) for i in range(first, first + len(page_prepared))]
+                    key = render_thumbnails(stdscr, page_names, page_prepared, idx - first, layout, page, thumb_pages, n, idx, color, args.ascii)
+                    if key in (curses.KEY_RIGHT, ord('n'), ord(' ')):
+                        idx = (idx + 1) % n
+                    elif key in (curses.KEY_LEFT, ord('p')):
+                        idx = (idx - 1) % n
+                    elif key == curses.KEY_UP:
+                        idx = 0
+                    elif key == curses.KEY_DOWN:
+                        idx = n - 1
+                    elif key in (ord('t'), ord('T')):
+                        thumb_count = 4 if key == ord('t') else 9
+                    elif key in _ENTER_KEYS:
+                        thumb_mode = False
+                    elif key == ord('i'):
+                        _show_metadata_panel(stdscr, _metadata_lines(image_files[idx]))
+                    elif key == ord('?'):
+                        _show_help_panel(stdscr)
+                    elif key in (ord('q'), 27):
+                        break
+                    continue
 
                 img_w, img_h = viewport_dims()
                 current_video_position = video_position_for_index(idx)
@@ -1282,6 +1429,14 @@ def main():
                     continue
                 if key == 'decrease_delay':
                     current_delay = _clamp_delay(current_delay - 1)
+                    continue
+                if key in (ord('t'), ord('T')) or key in _ENTER_KEYS:
+                    thumb_mode = True
+                    if key in (ord('t'), ord('T')):
+                        thumb_count = 4 if key == ord('t') else 9
+                    slideshow_active = False
+                    slideshow_reverse = False
+                    video_playback_active = False
                     continue
                 slideshow_active, slideshow_reverse = _update_slideshow_state(slideshow_active, slideshow_reverse, key)
                 if key in ('toggle_slideshow', 'toggle_slideshow_reverse'):

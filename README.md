@@ -8,6 +8,7 @@ It was written to be used as a terminal image viewer with [`nnn`](https://github
 
 - Braille art rendering for images
 - ASCII density fallback mode (for terminals without Braille font support)
+- Thumbnail previews
 - Animated GIF support
 - xterm-256 color and grayscale
 - Dithering options (ordered, error diffusion, atkinson)
@@ -92,6 +93,8 @@ options:
   -d {ordered,error,atkinson,none}, --dither {ordered,error,atkinson,none}
                         Dithering mode: ordered (default, clean), error (Floyd-Steinberg, smooth gradients), atkinson (preserves brightness), none
   -a, --ascii           Use ASCII characters instead of Braille (for terminals without Braille font support)
+  -t [N], --thumbnails [N]
+                        Show N thumbnails per page: 4 (2x2) or 9 (3x3), default: 4; press Enter to open an image.
   -s [DELAY], --slideshow [DELAY]
                         Enable slideshow mode with optional integer delay in seconds (default: 5).
   -k SEEK, --seek SEEK  Seek position to extract frame from videos in seconds (default: 10)
@@ -148,6 +151,8 @@ options:
 | <kbd>h</kbd>, <kbd>j</kbd>, <kbd>k</kbd>, <kbd>l</kbd>      | Pan left, down, up, right while zoomed |
 | <kbd>r</kbd>               | Rotate clockwise |
 | <kbd>f</kbd>               | Flip horizontally |
+| <kbd>t</kbd>, <kbd>T</kbd> | Show 4 / 9 thumbnails |
+| <kbd>Enter</kbd>           | Toggle between thumbnails and the selected image |
 | <kbd>i</kbd>               | Show file metadata |
 | <kbd>d</kbd>, <kbd>D</kbd>            | Decrease/increase slideshow delay by 1 sec |
 | <kbd>[</kbd>, <kbd>]</kbd>            | Seek backward/forward in a video by the current seek step |
