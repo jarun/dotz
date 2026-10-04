@@ -20,13 +20,16 @@ It was written to be used as a terminal image viewer with [`nnn`](https://github
 - Bounded background preloading
 - Keyboard navigation and slideshow mode
 
-<br>
-<img width="1323" height="826" alt="image_01" src="https://github.com/user-attachments/assets/f2becbbc-cfeb-42b3-bd92-3882ff3fb570" />
-<br><br>
-<img width="1333" height="827" alt="image_02" src="https://github.com/user-attachments/assets/62bc16a8-246b-4b5a-a11e-fd0faa5c8066" />
-<br><br>
-<img width="1301" height="954" alt="image_03" src="https://github.com/user-attachments/assets/609805be-c0c5-4815-bb33-3bc70d69c152" />
-
+<table width="100%">
+    <tr>
+        <td width="50%"><img src="https://github.com/user-attachments/assets/64817e0f-f9f3-4ccf-82ed-5f011fbedc41" alt="image_01" width="100%"></td>
+        <td width="50%"><img src="https://github.com/user-attachments/assets/f2becbbc-cfeb-42b3-bd92-3882ff3fb570" alt="image_02" width="100%"></td>
+    </tr>
+    <tr>
+        <td width="50%"><img src="https://github.com/user-attachments/assets/62bc16a8-246b-4b5a-a11e-fd0faa5c8066" alt="image_03" width="100%"></td>
+        <td width="50%"><img src="https://github.com/user-attachments/assets/9be59277-0ce4-4236-9904-0ba5cf22a79f" alt="image_04" width="100%"></td>
+    </tr>
+</table>
 
 #### Supported formats
 
