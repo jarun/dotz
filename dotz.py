@@ -27,6 +27,30 @@ BRAILLE_MAP = (
     (0x40, 0x80),  # row 3
 )
 _BRAILLE_BITS = np.asarray(BRAILLE_MAP, dtype=np.uint16)
+
+# Block characters for ASCII fallback mode (2x2 grid per character cell)
+# Using upper/lower half blocks and full/empty blocks
+BLOCK_CHARS = {
+    # (top_left, top_right, bottom_left, bottom_right) -> character
+    (0, 0, 0, 0): ' ',      # empty
+    (1, 0, 0, 0): '▘',      # upper left
+    (0, 1, 0, 0): '▝',      # upper right
+    (0, 0, 1, 0): '▖',      # lower left
+    (0, 0, 0, 1): '▗',      # lower right
+    (1, 1, 0, 0): '▀',      # upper half
+    (0, 0, 1, 1): '▄',      # lower half
+    (1, 0, 1, 0): '▌',      # left half
+    (0, 1, 0, 1): '▐',      # right half
+    (1, 0, 0, 1): '▚',      # upper left + lower right
+    (0, 1, 1, 0): '▞',      # upper right + lower left
+    (1, 1, 1, 0): '▛',      # upper + left
+    (1, 1, 0, 1): '▜',      # upper + right
+    (1, 0, 1, 1): '▙',      # left + lower
+    (0, 1, 1, 1): '▟',      # right + lower
+    (1, 1, 1, 1): '█',      # full
+}
+_BLOCK_KEYS = np.array(list(BLOCK_CHARS.keys()), dtype=np.uint8)
+_BLOCK_VALS = np.array(list(BLOCK_CHARS.values()), dtype='<U1')
 VIDEO_EXTS = frozenset({".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".wmv", ".mpeg", ".mpg"})
 IMAGE_EXTS = frozenset({"png", "jpg", "jpeg", "bmp", "gif", "tiff", "webp"})
 VIDEO_EXTS_NO_DOT = frozenset(ext.lstrip(".") for ext in VIDEO_EXTS)
@@ -116,13 +140,18 @@ def _transform_image(image, rotation_quadrants=0, flip_horizontal=False):
     return image
 
 
-def _load_image(image_path, img_w, img_h, sharpen, color, rotation_quadrants=0, flip_horizontal=False):
+def _load_image(image_path, img_w, img_h, sharpen, color, rotation_quadrants=0, flip_horizontal=False, ascii_mode=False):
     """Load and prepare image data. Accepts a file path or PIL Image. Returns (frames, color_maps, oy, ox, fit_h, fit_w, durations)."""
     img = image_path if isinstance(image_path, Image.Image) else Image.open(image_path)
     is_animated = getattr(img, "is_animated", False)
     n_frames = getattr(img, "n_frames", 1)
-    cell_cols, cell_rows = img_w // 2, img_h // 4
-    max_w, max_h = cell_cols * 2, cell_rows * 4
+    # In ASCII mode, blocks are 2x2; in Braille mode, blocks are 4x2
+    block_h = 2 if ascii_mode else 4
+    cell_cols, cell_rows = img_w // 2, img_h // block_h
+    max_w, max_h = cell_cols * 2, cell_rows * block_h
+    # ASCII mode: characters are square (1:1), terminals are ~2:1
+    # Need to compensate by stretching image vertically 2x
+    aspect_correction = 2.0 if ascii_mode else 1.0
     frames = []
     color_maps = []
     durations = []
@@ -134,7 +163,9 @@ def _load_image(image_path, img_w, img_h, sharpen, color, rotation_quadrants=0, 
         img_rgb = frame.convert("RGB") if color else None
         img_grey = img_rgb.convert("L") if color else frame.convert("L")
         img_aspect = img_grey.width / img_grey.height
-        fit_w, fit_h = (max_w, int(round(max_w / img_aspect))) if (max_w / img_aspect) <= max_h else (int(round(max_h * img_aspect)), max_h)
+        # Apply aspect correction for ASCII mode
+        effective_aspect = img_aspect * aspect_correction
+        fit_w, fit_h = (max_w, int(round(max_w / effective_aspect))) if (max_w / effective_aspect) <= max_h else (int(round(max_h * effective_aspect)), max_h)
         fit_w, fit_h = min(fit_w, max_w), min(fit_h, max_h)
         img_grey_r = img_grey.resize((fit_w, fit_h), Image.LANCZOS)
         if sharpen: img_grey_r = img_grey_r.filter(ImageFilter.UnsharpMask(radius=1.2, percent=100, threshold=2))
@@ -150,7 +181,7 @@ def _load_image(image_path, img_w, img_h, sharpen, color, rotation_quadrants=0, 
             rgb_arr = np.asarray(img_rgb_r, dtype=np.float32)
             canvas_rgb = np.zeros((img_h, img_w, 3), dtype=np.float32)
             canvas_rgb[oy:oy + fit_h, ox:ox + fit_w] = rgb_arr
-            blocks = canvas_rgb[:cell_rows*4, :cell_cols*2, :].reshape(cell_rows, 4, cell_cols, 2, 3)
+            blocks = canvas_rgb[:cell_rows*block_h, :cell_cols*2, :].reshape(cell_rows, block_h, cell_cols, 2, 3)
             block_means = blocks.mean(axis=(1, 3), dtype=np.float32)
             color_map = _nearest_xterm_indices(block_means).reshape(cell_rows, cell_cols)
         else:
@@ -413,7 +444,7 @@ def _show_help_panel(stdscr):
     _show_panel(stdscr, "Help", _HELP_LINES, emphasized_rows=(0, 4, 8, 13, 16))
 
 
-def _prepare_render_item(image_item, img_w, img_h, sharpen, color, seek, extractformat, rotation_quadrants=0, flip_horizontal=False, dither_mode="ordered", keyframes_only=False):
+def _prepare_render_item(image_item, img_w, img_h, sharpen, color, seek, extractformat, rotation_quadrants=0, flip_horizontal=False, dither_mode="ordered", keyframes_only=False, ascii_mode=False):
     """Prepare renderable frame buffers for one item. Safe to run in worker threads."""
     image_path = image_item
     display_name = None
@@ -424,14 +455,16 @@ def _prepare_render_item(image_item, img_w, img_h, sharpen, color, seek, extract
             image_path, display_name = image_path
         elif isinstance(image_path, Image.Image):
             display_name = '[video frame]'
-    frames, color_maps, oy, ox, fit_h, fit_w, durations = _load_image(image_path, img_w, img_h, sharpen, color, rotation_quadrants, flip_horizontal)
+    frames, color_maps, oy, ox, fit_h, fit_w, durations = _load_image(image_path, img_w, img_h, sharpen, color, rotation_quadrants, flip_horizontal, ascii_mode)
+    # Block dimensions depend on mode: Braille uses 4x2, ASCII uses 2x2
+    block_h = 2 if ascii_mode else 4
     block_means = [
-        frame.reshape(img_h // 4, 4, img_w // 2, 2).mean(axis=(1, 3), dtype=np.float32)
+        frame.reshape(img_h // block_h, block_h, img_w // 2, 2).mean(axis=(1, 3), dtype=np.float32)
         for frame in frames
     ]
     braille_rows = [
         _precompute_braille_rows(frame, dither_mode) for frame in frames
-    ] if dither_mode in ("ordered", "none") else None
+    ] if dither_mode in ("ordered", "none") and not ascii_mode else None
     return {
         "frames": frames,
         "color_maps": color_maps,
@@ -563,6 +596,30 @@ def _zoom_array(array, zoom_factor, target_size, pan_offset=(0.0, 0.0), fill_val
     return result
 
 
+def _blocks_to_chars(blocks, ascii_mode=False):
+    """Convert 2x2 blocks to characters (Braille or block characters)."""
+    if ascii_mode:
+        # blocks shape: (rows, 2, cols, 2) -> need to map each 2x2 to a character
+        rows, _, cols, _ = blocks.shape
+        # Threshold at 0.5
+        binary = (blocks > 0.5).astype(np.uint8)
+        # Reshape to (rows, cols, 4) for easier indexing
+        binary = binary.transpose(0, 2, 1, 3).reshape(rows, cols, 4)
+        # Map to characters
+        chars = np.empty((rows, cols), dtype='<U1')
+        for i in range(rows):
+            for j in range(cols):
+                key = tuple(binary[i, j])
+                # Find matching block character
+                idx = np.where(np.all(_BLOCK_KEYS == key, axis=1))[0]
+                chars[i, j] = _BLOCK_VALS[idx[0]] if len(idx) > 0 else ' '
+        return tuple("".join(row) for row in chars)
+    else:
+        # Braille mode
+        codes = BRAILLE_BASE + np.sum(blocks * _BRAILLE_BITS[None, :, None, :], axis=(1, 3), dtype=np.uint16)
+        return tuple("".join(chr(int(code)) for code in row) for row in codes)
+
+
 def _update_slideshow_state(slideshow_active, slideshow_reverse, key):
     if key == 'toggle_slideshow':
         return (True, False) if not slideshow_active else (False, False) if not slideshow_reverse else (True, False)
@@ -582,11 +639,11 @@ def _braille_code(block, threshold):
     return BRAILLE_BASE + int(np.sum((block > threshold) * _BRAILLE_BITS, dtype=np.uint16))
 
 
-def _draw_braille_rows(stdscr, rows, cols, blocks, block_means, thresholds, color_map, color, color_pair_attrs, use_error_dither, use_ordered_dither, braille_rows=None):
+def _draw_braille_rows(stdscr, rows, cols, blocks, block_means, thresholds, color_map, color, color_pair_attrs, use_error_dither, use_ordered_dither, char_rows=None):
     for cy in range(rows):
-        braille_row = braille_rows[cy] if braille_rows is not None else None
+        char_row = char_rows[cy] if char_rows is not None else None
         color_row = color_map[cy] if color and color_map is not None else None
-        if braille_row is not None:
+        if char_row is not None:
             current_attr = None
             start_x = 0
             for cx in range(cols):
@@ -595,13 +652,13 @@ def _draw_braille_rows(stdscr, rows, cols, blocks, block_means, thresholds, colo
                     start_x, current_attr = cx, attr
                 elif current_attr != attr:
                     try:
-                        stdscr.addstr(cy, start_x, braille_row[start_x:cx], current_attr)
+                        stdscr.addstr(cy, start_x, char_row[start_x:cx], current_attr)
                     except curses.error:
                         pass
                     start_x, current_attr = cx, attr
             if current_attr is not None:
                 try:
-                    stdscr.addstr(cy, start_x, braille_row[start_x:], current_attr)
+                    stdscr.addstr(cy, start_x, char_row[start_x:], current_attr)
                 except curses.error:
                     pass
             continue
@@ -658,7 +715,7 @@ def _key_command(key, video_position):
     return _VIEW_KEY_COMMANDS.get(key) or (_VIDEO_KEY_COMMANDS.get(key) if video_position is not None else None)
 
 
-def render(stdscr, image_files, idx, sharpen, dither_mode, color, wait_time=5, slideshow=False, slideshow_reverse=False, prepared=None, zoom_factor=1.0, pan_offset=(0.0, 0.0), rotation_quadrants=0, flip_horizontal=False, video_position=None, video_seek_step=None, video_playback=False, video_playback_fps=VIDEO_PLAYBACK_DEFAULT_FPS, discard_queued_key=None):
+def render(stdscr, image_files, idx, sharpen, dither_mode, color, wait_time=5, slideshow=False, slideshow_reverse=False, prepared=None, zoom_factor=1.0, pan_offset=(0.0, 0.0), rotation_quadrants=0, flip_horizontal=False, video_position=None, video_seek_step=None, video_playback=False, video_playback_fps=VIDEO_PLAYBACK_DEFAULT_FPS, discard_queued_key=None, ascii_mode=False):
     import time
     curses.curs_set(0)
     curses.use_default_colors()
@@ -715,17 +772,22 @@ def render(stdscr, image_files, idx, sharpen, dither_mode, color, wait_time=5, s
 
     stdscr.erase()
     max_y, max_x = stdscr.getmaxyx()
-    rows = max_y
+    rows = max_y - STATUS_LINE_COUNT
     cols = max_x
     status_y = max_y - STATUS_LINE_COUNT
-    img_w = cols * 2
-    img_h = rows * 4
+    # In ASCII mode, each character cell is 2x2 pixels (vs 4x2 for Braille)
+    if ascii_mode:
+        img_w = cols * 2
+        img_h = rows * 2
+    else:
+        img_w = cols * 2
+        img_h = rows * 4
     try:
         image_item = image_files[idx]
         if prepared is None:
             seek = getattr(render, '_seek', 10)
             fmt = getattr(render, '_format', 'jpeg')
-            prepared = _prepare_render_item(image_item, img_w, img_h, sharpen, color, seek, fmt, rotation_quadrants, flip_horizontal, dither_mode)
+            prepared = _prepare_render_item(image_item, img_w, img_h, sharpen, color, seek, fmt, rotation_quadrants, flip_horizontal, dither_mode, ascii_mode=ascii_mode)
         frames = prepared["frames"]
         color_maps = prepared["color_maps"]
         base_block_means = prepared.get("block_means")
@@ -748,6 +810,9 @@ def render(stdscr, image_files, idx, sharpen, dither_mode, color, wait_time=5, s
     use_error_dither = dither_mode == "error"
     use_atkinson_dither = dither_mode == "atkinson"
     use_ordered_dither = dither_mode == "ordered"
+    # In ASCII mode, blocks are 2x2 (1 character cell = 2x2 pixels)
+    # In Braille mode, blocks are 4x2 (1 character cell = 4x2 pixels)
+    block_h = 2 if ascii_mode else 4
     while True:
         stdscr.erase()
         perceptual = frames[frame_idx]
@@ -756,30 +821,37 @@ def render(stdscr, image_files, idx, sharpen, dither_mode, color, wait_time=5, s
             frame_view = perceptual
             if use_error_dither:
                 dithered = floyd_steinberg_dither(frame_view.copy())
-                blocks = dithered.reshape(rows, 4, cols, 2)
+                blocks = dithered.reshape(rows, block_h, cols, 2)
                 block_means = blocks.mean(axis=(1, 3), dtype=np.float32)
             elif use_atkinson_dither:
                 dithered = atkinson_dither(frame_view.copy())
-                blocks = dithered.reshape(rows, 4, cols, 2)
+                blocks = dithered.reshape(rows, block_h, cols, 2)
                 block_means = blocks.mean(axis=(1, 3), dtype=np.float32)
             else:
-                blocks = frame_view.reshape(rows, 4, cols, 2)
+                blocks = frame_view.reshape(rows, block_h, cols, 2)
                 block_means = base_block_means[frame_idx] if base_block_means is not None else blocks.mean(axis=(1, 3), dtype=np.float32)
             braille_rows = base_braille_rows[frame_idx] if base_braille_rows is not None else None
         else:
-            frame_view = _zoom_array(perceptual, zoom_factor, target_size=(rows * 4, cols * 2), pan_offset=pan_offset)
+            frame_view = _zoom_array(perceptual, zoom_factor, target_size=(rows * block_h, cols * 2), pan_offset=pan_offset)
             color_map = _zoom_array(color_map, zoom_factor, target_size=(rows, cols), pan_offset=pan_offset)
             if use_error_dither:
                 dithered = floyd_steinberg_dither(frame_view.copy())
-                blocks = dithered.reshape(rows, 4, cols, 2)
+                blocks = dithered.reshape(rows, block_h, cols, 2)
             elif use_atkinson_dither:
                 dithered = atkinson_dither(frame_view.copy())
-                blocks = dithered.reshape(rows, 4, cols, 2)
+                blocks = dithered.reshape(rows, block_h, cols, 2)
             else:
-                blocks = frame_view.reshape(rows, 4, cols, 2)
+                blocks = frame_view.reshape(rows, block_h, cols, 2)
             block_means = blocks.mean(axis=(1, 3), dtype=np.float32)
             braille_rows = None
-        _draw_braille_rows(stdscr, rows, cols, blocks, block_means, thresholds, color_map, color, color_pair_attrs, use_error_dither, use_ordered_dither, braille_rows)
+
+        # Convert blocks to appropriate characters based on mode
+        if ascii_mode:
+            char_rows = _blocks_to_chars(blocks, ascii_mode=True)
+        else:
+            char_rows = braille_rows
+
+        _draw_braille_rows(stdscr, rows, cols, blocks, block_means, thresholds, color_map, color, color_pair_attrs, use_error_dither, use_ordered_dither, char_rows)
         try:
             item_status, detail_status = _format_status(idx, n, shown_name, zoom_factor, slideshow, slideshow_reverse, wait_time, video_position, video_seek_step, video_playback)
             status_width = max(0, max_x - 1)
@@ -856,6 +928,7 @@ def main():
     parser.add_argument("-C", "--no-color", action="store_true", help="Disable color (greyscale only with dim/normal/bold)")
     parser.add_argument("-d", "--dither", choices=["ordered", "error", "atkinson", "none"], default="ordered",
                         help="Dithering mode: ordered (default, clean), error (Floyd-Steinberg, smooth gradients), atkinson (Atkinson, preserves brightness), none")
+    parser.add_argument("-a", "--ascii", action="store_true", help="Use block characters instead of Braille (for terminals without Braille font support)")
 
     parser.add_argument("-s", "--slideshow", dest="delay", nargs="?", const=5, type=int, help="Enable slideshow mode with optional integer delay in seconds (default: 5).")
     parser.add_argument("-k", "--seek", type=int, default=10, help="Seek position to extract frame from videos in seconds (default: 10)")
@@ -890,7 +963,7 @@ def main():
             os.dup2(tty_fd, 0)
             os.close(tty_fd)
             try:
-                curses.wrapper(lambda *a, **kw: render(*a, **kw, wait_time=slideshow_delay, slideshow=slideshow, video_playback_fps=args.fps), image_files, idx, not args.no_sharpen, args.dither, not args.no_color)
+                curses.wrapper(lambda *a, **kw: render(*a, **kw, wait_time=slideshow_delay, slideshow=slideshow, video_playback_fps=args.fps, ascii_mode=args.ascii), image_files, idx, not args.no_sharpen, args.dither, not args.no_color)
             finally:
                 os.dup2(orig_stdin_fd, 0)
                 os.close(orig_stdin_fd)
@@ -947,7 +1020,12 @@ def main():
 
         def viewport_dims():
             max_y, max_x = stdscr.getmaxyx()
-            return max_x * 2, max_y * 4
+            # Reserve space for status lines
+            render_rows = max_y - STATUS_LINE_COUNT
+            # In ASCII mode, each character cell is 2x2 pixels (vs 4x2 for Braille)
+            if args.ascii:
+                return max_x * 2, render_rows * 2
+            return max_x * 2, render_rows * 4
 
         def video_path_for_index(image_idx):
             image_item = image_files[image_idx]
@@ -1005,6 +1083,7 @@ def main():
                 args.format,
                 rotation_quadrants,
                 flip_horizontal,
+                args.ascii,
             )
 
         def preload_targets(image_idx, current_rotation, current_flip):
@@ -1035,6 +1114,7 @@ def main():
                 flip_horizontal,
                 dither_mode,
                 keyframes_only,
+                ascii_mode=args.ascii,
             )
 
         def get_preloaded(image_idx, img_w, img_h, rotation_quadrants, flip_horizontal, protected_keys, executor):
@@ -1149,6 +1229,7 @@ def main():
                         video_seek_step=video_seek_step if current_video_position is not None else None,
                         video_playback=video_playback_active and current_video_position is not None,
                         video_playback_fps=args.fps,
+                        ascii_mode=args.ascii,
                         discard_queued_key=discard_queued_key,
                     )
                     discard_queued_key = None

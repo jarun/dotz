@@ -10,6 +10,8 @@ It was written to be used as a terminal image viewer with [`nnn`](https://github
 - Animated GIF support
 - xterm-256 color and grayscale
 - Dithering options (ordered, error diffusion, atkinson)
+- Block character fallback mode (for terminals without Braille font support)
+- Automatic aspect ratio correction for both Braille and block modes
 - Video preview (frame extraction with ffmpeg)
 - Video playback with seek controls
 - File metadata panel
@@ -73,7 +75,7 @@ python3 dotz.py [options] <file-or-directory>
 ## Usage
 
 ```
-usage: dotz [-h] [-S] [-C] [-d {ordered,error,none}] [-s [DELAY]] [-k SEEK] [-f {jpeg,png}] [-F {5,6,7,8,9,10}] [path]
+usage: dotz [-h] [-S] [-C] [-d {ordered,error,atkinson,none}] [-a] [-s [DELAY]] [-k SEEK] [-f {jpeg,png}] [-F {5,6,7,8,9,10}] [path]
 
 Render an image or all images/videos in a directory as Braille cells using ncurses with optional xterm-256 color.
 
@@ -84,8 +86,9 @@ options:
   -h, --help            show this help message and exit
   -S, --no-sharpen      Disable edge sharpening
   -C, --no-color        Disable color (greyscale only with dim/normal/bold)
-  -d {ordered,error,none}, --dither {ordered,error,none}
-                        Dithering mode: ordered (default, clean), error (Floyd-Steinberg, smooth gradients), none
+  -d {ordered,error,atkinson,none}, --dither {ordered,error,atkinson,none}
+                        Dithering mode: ordered (default, clean), error (Floyd-Steinberg, smooth gradients), atkinson (preserves brightness), none
+  -a, --ascii           Use block characters instead of Braille (for terminals without Braille font support)
   -s [DELAY], --slideshow [DELAY]
                         Enable slideshow mode with optional integer delay in seconds (default: 5).
   -k SEEK, --seek SEEK  Seek position to extract frame from videos in seconds (default: 10)
@@ -116,6 +119,18 @@ options:
 - To use a custom video playback frame rate (e.g. 5 FPS):
     ```sh
     python3 -m dotz -F 5 path/to/video.mp4
+    ```
+- To use Atkinson dithering (preserves brightness better):
+    ```sh
+    python3 -m dotz -d atkinson path/to/image.jpg
+    ```
+- To use block character mode (for terminals without Braille font):
+    ```sh
+    python3 -m dotz -a path/to/image.jpg
+    ```
+- To combine block character mode with Atkinson dithering:
+    ```sh
+    python3 -m dotz -a -d atkinson path/to/image.jpg
     ```
 
 ## Navigation
