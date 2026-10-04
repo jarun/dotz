@@ -889,7 +889,7 @@ def main():
             super().print_help(file)
             self.print_extended_help(file)
 
-    parser = ExtendedArgumentParser(description="Render an image or all images/videos in a directory as Braille cells using ncurses with optional xterm-256 color.")
+    parser = ExtendedArgumentParser(description="Render an image or all images/videos in a directory as Braille and ASCII cells using ncurses with optional xterm-256 color.")
     parser.add_argument("path", nargs="?", help="Path to the image/video file or directory (optional)")
     parser.add_argument("-S", "--no-sharpen", action="store_true", help="Disable edge sharpening")
     parser.add_argument("-C", "--no-color", action="store_true", help="Disable color (greyscale only with dim/normal/bold)")

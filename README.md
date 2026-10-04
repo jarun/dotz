@@ -1,16 +1,16 @@
 <h2 align="center">dotz - <i>Braille and ASCII art previews in the terminal</i></h2>
 
-Render image and video previews as Braille art in the terminal with xterm-256 color and ncurses dim/normal/bold attributes.
+Render image and video previews as Braille and ASCII art in the terminal with xterm-256 color and ncurses dim/normal/bold attributes.
 
 It was written to be used as a terminal image viewer with [`nnn`](https://github.com/jarun/nnn). Works independently too.
 
 ## Features
 
 - Braille art rendering for images
+- ASCII density fallback mode (for terminals without Braille font support)
 - Animated GIF support
 - xterm-256 color and grayscale
 - Dithering options (ordered, error diffusion, atkinson)
-- ASCII density fallback mode (for terminals without Braille font support)
 - Automatic aspect ratio correction for both Braille and ASCII modes
 - Video preview (frame extraction with ffmpeg)
 - Video playback with seek controls
@@ -80,7 +80,7 @@ python3 dotz.py [options] <file-or-directory>
 ```
 usage: dotz [-h] [-S] [-C] [-d {ordered,error,atkinson,none}] [-a] [-s [DELAY]] [-k SEEK] [-f {jpeg,png}] [-F {5,6,7,8,9,10}] [path]
 
-Render an image or all images/videos in a directory as Braille cells using ncurses with optional xterm-256 color.
+Render an image or all images/videos in a directory as Braille and ASCII cells using ncurses with optional xterm-256 color.
 
 positional arguments:
   path                  Path to the image/video file or directory (optional)
