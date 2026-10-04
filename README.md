@@ -1,4 +1,4 @@
-<h2 align="center">dotz - <i>terminal image and video previewer in Braille art</i></h2>
+<h2 align="center">dotz - <i>Braille and ASCII art previews in the terminal</i></h2>
 
 Render image and video previews as Braille art in the terminal with xterm-256 color and ncurses dim/normal/bold attributes.
 
