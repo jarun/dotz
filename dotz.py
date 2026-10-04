@@ -209,22 +209,34 @@ def extract_video_frame(path, frametime, extractformat, keyframes_only=False):
     import subprocess, io
     vcodec = 'mjpeg' if extractformat == 'jpeg' else 'png'
     frametime = _clamp_video_position(frametime)
-    ffmpeg_cmd = [
-        'ffmpeg', '-y', '-nostdin', '-hide_banner', '-loglevel', 'error',
-    ]
-    if keyframes_only:
-        ffmpeg_cmd.extend(('-skip_frame', 'nokey'))
-    ffmpeg_cmd.extend((
-        '-ss', f'{frametime:.3f}', '-i', path,
-        '-an', '-threads', str(VIDEO_DECODE_THREADS), '-vsync', '0',
-        '-vframes', '1',
-        '-f', 'image2pipe',
-        '-vcodec', vcodec,
-        '-',
-    ))
-    result = subprocess.run(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # Seeking at/after the last frame yields no output, so retry earlier, then from the end.
+    for seek_args in (
+        ('-ss', f'{frametime:.3f}'),
+        ('-ss', f'{max(0.0, frametime - 0.5):.3f}'),
+        ('-ss', f'{max(0.0, frametime - 2.0):.3f}'),
+        ('-sseof', '-1'),
+        ('-sseof', '-0.1'),
+        ('-ss', '0'),
+    ):
+        ffmpeg_cmd = [
+            'ffmpeg', '-y', '-nostdin', '-hide_banner', '-loglevel', 'error',
+        ]
+        if keyframes_only:
+            ffmpeg_cmd.extend(('-skip_frame', 'nokey'))
+        ffmpeg_cmd.extend((
+            *seek_args, '-i', path,
+            '-an', '-threads', str(VIDEO_DECODE_THREADS), '-vsync', '0',
+            '-vframes', '1',
+            '-strict', 'unofficial',
+            '-f', 'image2pipe',
+            '-vcodec', vcodec,
+            '-',
+        ))
+        result = subprocess.run(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode == 0 and result.stdout:
+            break
     if result.returncode != 0 or not result.stdout:
-        raise RuntimeError(f"ffmpeg error: {result.stderr.decode()[:100]}")
+        raise RuntimeError(f"ffmpeg error: {result.stderr.decode()[:100] or 'no frame at position'}")
     from PIL import Image
     img = Image.open(io.BytesIO(result.stdout))
     img.load()
