@@ -22,12 +22,12 @@ Initially written for [`nnn`](https://github.com/jarun/nnn), it evolved as an in
 
 <table width="100%">
     <tr>
-        <td width="50%"><img src="https://github.com/user-attachments/assets/64817e0f-f9f3-4ccf-82ed-5f011fbedc41" alt="image_01" width="100%"></td>
-        <td width="50%"><img src="https://github.com/user-attachments/assets/f2becbbc-cfeb-42b3-bd92-3882ff3fb570" alt="image_02" width="100%"></td>
+        <td width="50%"><img src="https://github.com/user-attachments/assets/81d8de38-540e-4fb6-8698-07e625f349c2" alt="image_01" width="100%"></td>
+        <td width="50%"><img src="https://github.com/user-attachments/assets/96320b6a-283b-4cab-b2ba-5ab04214673c" alt="image_02" width="100%"></td>
     </tr>
     <tr>
-        <td width="50%"><img src="https://github.com/user-attachments/assets/62bc16a8-246b-4b5a-a11e-fd0faa5c8066" alt="image_03" width="100%"></td>
-        <td width="50%"><img src="https://github.com/user-attachments/assets/9be59277-0ce4-4236-9904-0ba5cf22a79f" alt="image_04" width="100%"></td>
+        <td width="50%"><img src="https://github.com/user-attachments/assets/688e2f1c-7719-4d67-beb5-82c8eddec82e" alt="image_03" width="100%"></td>
+        <td width="50%"><img src="https://github.com/user-attachments/assets/9fc9a617-d55d-408b-81e9-450004f1644b" alt="image_04" width="100%"></td>
     </tr>
 </table>
 
