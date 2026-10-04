@@ -10,8 +10,8 @@ It was written to be used as a terminal image viewer with [`nnn`](https://github
 - Animated GIF support
 - xterm-256 color and grayscale
 - Dithering options (ordered, error diffusion, atkinson)
-- Block character fallback mode (for terminals without Braille font support)
-- Automatic aspect ratio correction for both Braille and block modes
+- ASCII density fallback mode (for terminals without Braille font support)
+- Automatic aspect ratio correction for both Braille and ASCII modes
 - Video preview (frame extraction with ffmpeg)
 - Video playback with seek controls
 - File metadata panel
@@ -88,7 +88,7 @@ options:
   -C, --no-color        Disable color (greyscale only with dim/normal/bold)
   -d {ordered,error,atkinson,none}, --dither {ordered,error,atkinson,none}
                         Dithering mode: ordered (default, clean), error (Floyd-Steinberg, smooth gradients), atkinson (preserves brightness), none
-  -a, --ascii           Use block characters instead of Braille (for terminals without Braille font support)
+  -a, --ascii           Use ASCII characters instead of Braille (for terminals without Braille font support)
   -s [DELAY], --slideshow [DELAY]
                         Enable slideshow mode with optional integer delay in seconds (default: 5).
   -k SEEK, --seek SEEK  Seek position to extract frame from videos in seconds (default: 10)
@@ -124,11 +124,11 @@ options:
     ```sh
     python3 -m dotz -d atkinson path/to/image.jpg
     ```
-- To use block character mode (for terminals without Braille font):
+- To use ASCII mode (for terminals without Braille font):
     ```sh
     python3 -m dotz -a path/to/image.jpg
     ```
-- To combine block character mode with Atkinson dithering:
+- To combine ASCII mode with Atkinson dithering:
     ```sh
     python3 -m dotz -a -d atkinson path/to/image.jpg
     ```

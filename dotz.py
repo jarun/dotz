@@ -28,29 +28,7 @@ BRAILLE_MAP = (
 )
 _BRAILLE_BITS = np.asarray(BRAILLE_MAP, dtype=np.uint16)
 
-# Block characters for ASCII fallback mode (2x2 grid per character cell)
-# Using upper/lower half blocks and full/empty blocks
-BLOCK_CHARS = {
-    # (top_left, top_right, bottom_left, bottom_right) -> character
-    (0, 0, 0, 0): ' ',      # empty
-    (1, 0, 0, 0): '▘',      # upper left
-    (0, 1, 0, 0): '▝',      # upper right
-    (0, 0, 1, 0): '▖',      # lower left
-    (0, 0, 0, 1): '▗',      # lower right
-    (1, 1, 0, 0): '▀',      # upper half
-    (0, 0, 1, 1): '▄',      # lower half
-    (1, 0, 1, 0): '▌',      # left half
-    (0, 1, 0, 1): '▐',      # right half
-    (1, 0, 0, 1): '▚',      # upper left + lower right
-    (0, 1, 1, 0): '▞',      # upper right + lower left
-    (1, 1, 1, 0): '▛',      # upper + left
-    (1, 1, 0, 1): '▜',      # upper + right
-    (1, 0, 1, 1): '▙',      # left + lower
-    (0, 1, 1, 1): '▟',      # right + lower
-    (1, 1, 1, 1): '█',      # full
-}
-_BLOCK_KEYS = np.array(list(BLOCK_CHARS.keys()), dtype=np.uint8)
-_BLOCK_VALS = np.array(list(BLOCK_CHARS.values()), dtype='<U1')
+ASCII_DENSITY_CHARS = " .:-=+*#%@"
 VIDEO_EXTS = frozenset({".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".wmv", ".mpeg", ".mpg"})
 IMAGE_EXTS = frozenset({"png", "jpg", "jpeg", "bmp", "gif", "tiff", "webp"})
 VIDEO_EXTS_NO_DOT = frozenset(ext.lstrip(".") for ext in VIDEO_EXTS)
@@ -597,22 +575,11 @@ def _zoom_array(array, zoom_factor, target_size, pan_offset=(0.0, 0.0), fill_val
 
 
 def _blocks_to_chars(blocks, ascii_mode=False):
-    """Convert 2x2 blocks to characters (Braille or block characters)."""
+    """Convert pixel blocks to characters (ASCII density or Braille)."""
     if ascii_mode:
-        # blocks shape: (rows, 2, cols, 2) -> need to map each 2x2 to a character
-        rows, _, cols, _ = blocks.shape
-        # Threshold at 0.5
-        binary = (blocks > 0.5).astype(np.uint8)
-        # Reshape to (rows, cols, 4) for easier indexing
-        binary = binary.transpose(0, 2, 1, 3).reshape(rows, cols, 4)
-        # Map to characters
-        chars = np.empty((rows, cols), dtype='<U1')
-        for i in range(rows):
-            for j in range(cols):
-                key = tuple(binary[i, j])
-                # Find matching block character
-                idx = np.where(np.all(_BLOCK_KEYS == key, axis=1))[0]
-                chars[i, j] = _BLOCK_VALS[idx[0]] if len(idx) > 0 else ' '
+        coverage = (blocks > 0.5).mean(axis=(1, 3))
+        indices = np.rint(coverage * (len(ASCII_DENSITY_CHARS) - 1)).astype(np.intp)
+        chars = np.asarray(list(ASCII_DENSITY_CHARS), dtype='<U1')[indices]
         return tuple("".join(row) for row in chars)
     else:
         # Braille mode
@@ -928,7 +895,7 @@ def main():
     parser.add_argument("-C", "--no-color", action="store_true", help="Disable color (greyscale only with dim/normal/bold)")
     parser.add_argument("-d", "--dither", choices=["ordered", "error", "atkinson", "none"], default="ordered",
                         help="Dithering mode: ordered (default, clean), error (Floyd-Steinberg, smooth gradients), atkinson (Atkinson, preserves brightness), none")
-    parser.add_argument("-a", "--ascii", action="store_true", help="Use block characters instead of Braille (for terminals without Braille font support)")
+    parser.add_argument("-a", "--ascii", action="store_true", help="Use ASCII characters instead of Braille (for terminals without Braille font support)")
 
     parser.add_argument("-s", "--slideshow", dest="delay", nargs="?", const=5, type=int, help="Enable slideshow mode with optional integer delay in seconds (default: 5).")
     parser.add_argument("-k", "--seek", type=int, default=10, help="Seek position to extract frame from videos in seconds (default: 10)")
