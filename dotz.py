@@ -55,7 +55,7 @@ def _precompute_braille_rows(frame, dither_mode):
     elif dither_mode == "none":
         dots = blocks > 0.5
     else:
-        return None
+        return None  # error diffusion modes (error, atkinson) can't be precomputed
     codes = BRAILLE_BASE + np.sum(dots * _BRAILLE_BITS[None, :, None, :], axis=(1, 3), dtype=np.uint16)
     return tuple("".join(chr(int(code)) for code in row) for row in codes)
 
@@ -688,6 +688,31 @@ def render(stdscr, image_files, idx, sharpen, dither_mode, color, wait_time=5, s
                         arr[y+1, x+1] += err * 1/16
         return arr
 
+    def atkinson_dither(img):
+        """Atkinson dithering - preserves average brightness better than Floyd-Steinberg."""
+        arr = img.copy()
+        h, w = arr.shape
+        for y in range(h):
+            for x in range(w):
+                old = arr[y, x]
+                new = 1.0 if old > 0.5 else 0.0
+                err = old - new
+                arr[y, x] = new
+                # Distribute error to 6 neighbors (1/8 each)
+                if x + 1 < w:
+                    arr[y, x+1] += err * 0.125
+                if x + 2 < w:
+                    arr[y, x+2] += err * 0.125
+                if y + 1 < h:
+                    if x > 0:
+                        arr[y+1, x-1] += err * 0.125
+                    arr[y+1, x] += err * 0.125
+                    if x + 1 < w:
+                        arr[y+1, x+1] += err * 0.125
+                if y + 2 < h:
+                    arr[y+2, x] += err * 0.125
+        return arr
+
     stdscr.erase()
     max_y, max_x = stdscr.getmaxyx()
     rows = max_y
@@ -721,6 +746,7 @@ def render(stdscr, image_files, idx, sharpen, dither_mode, color, wait_time=5, s
         return -1
     thresholds = ORDERED_THRESHOLDS
     use_error_dither = dither_mode == "error"
+    use_atkinson_dither = dither_mode == "atkinson"
     use_ordered_dither = dither_mode == "ordered"
     while True:
         stdscr.erase()
@@ -732,6 +758,10 @@ def render(stdscr, image_files, idx, sharpen, dither_mode, color, wait_time=5, s
                 dithered = floyd_steinberg_dither(frame_view.copy())
                 blocks = dithered.reshape(rows, 4, cols, 2)
                 block_means = blocks.mean(axis=(1, 3), dtype=np.float32)
+            elif use_atkinson_dither:
+                dithered = atkinson_dither(frame_view.copy())
+                blocks = dithered.reshape(rows, 4, cols, 2)
+                block_means = blocks.mean(axis=(1, 3), dtype=np.float32)
             else:
                 blocks = frame_view.reshape(rows, 4, cols, 2)
                 block_means = base_block_means[frame_idx] if base_block_means is not None else blocks.mean(axis=(1, 3), dtype=np.float32)
@@ -741,6 +771,9 @@ def render(stdscr, image_files, idx, sharpen, dither_mode, color, wait_time=5, s
             color_map = _zoom_array(color_map, zoom_factor, target_size=(rows, cols), pan_offset=pan_offset)
             if use_error_dither:
                 dithered = floyd_steinberg_dither(frame_view.copy())
+                blocks = dithered.reshape(rows, 4, cols, 2)
+            elif use_atkinson_dither:
+                dithered = atkinson_dither(frame_view.copy())
                 blocks = dithered.reshape(rows, 4, cols, 2)
             else:
                 blocks = frame_view.reshape(rows, 4, cols, 2)
@@ -821,8 +854,8 @@ def main():
     parser.add_argument("path", nargs="?", help="Path to the image/video file or directory (optional)")
     parser.add_argument("-S", "--no-sharpen", action="store_true", help="Disable edge sharpening")
     parser.add_argument("-C", "--no-color", action="store_true", help="Disable color (greyscale only with dim/normal/bold)")
-    parser.add_argument("-d", "--dither", choices=["ordered", "error", "none"], default="ordered",
-                        help="Dithering mode: ordered (default, clean), error (Floyd-Steinberg, smooth gradients), none")
+    parser.add_argument("-d", "--dither", choices=["ordered", "error", "atkinson", "none"], default="ordered",
+                        help="Dithering mode: ordered (default, clean), error (Floyd-Steinberg, smooth gradients), atkinson (Atkinson, preserves brightness), none")
 
     parser.add_argument("-s", "--slideshow", dest="delay", nargs="?", const=5, type=int, help="Enable slideshow mode with optional integer delay in seconds (default: 5).")
     parser.add_argument("-k", "--seek", type=int, default=10, help="Seek position to extract frame from videos in seconds (default: 10)")

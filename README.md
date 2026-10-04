@@ -9,7 +9,7 @@ It was written to be used as a terminal image viewer with [`nnn`](https://github
 - Braille art rendering for images
 - Animated GIF support
 - xterm-256 color and grayscale
-- Dithering options (ordered, error diffusion)
+- Dithering options (ordered, error diffusion, atkinson)
 - Video preview (frame extraction with ffmpeg)
 - Video playback with seek controls
 - File metadata panel
