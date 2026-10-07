@@ -13,7 +13,7 @@ import os
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter
 
-_VERSION_ = "0.2"
+_VERSION_ = "1.0"
 _AUTHOR_ = "Arun Prakash Jana"
 _AUTHOR_EMAIL_ = "engineerarun@gmail.com"
 _LICENSE_ = "MIT"
