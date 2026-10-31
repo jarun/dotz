@@ -3,7 +3,8 @@
 <p align="center">
 <a href="https://github.com/jarun/dotz/releases/latest"><img src="https://img.shields.io/github/release/jarun/dotz.svg?maxAge=600" alt="Latest release" /></a>
 <a href="https://pypi.org/project/dotz/"><img src="https://img.shields.io/pypi/v/dotz.svg?maxAge=600" alt="PyPI" /></a>
-<a href="https://github.com/jarun/dotz/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellowgreen.svg?maxAge=2592000" alt="License" /></a>
+<a href="https://github.com/jarun/dotz/blob/master/LICENSE"><img src="https://img.shields.io/badge/⚖-MIT-yellowgreen.svg?maxAge=2592000" alt="License" /></a>
+<a href="https://github.com/sponsors/jarun" target="_blank"><img src="https://img.shields.io/badge/sponsor-dotz-deeppink.svg" alt="GitHub Sponsors"></a>
 </p>
 
 Render image and video previews as Braille and ASCII art in the terminal with xterm-256 color and ncurses dim/normal/bold attributes.
