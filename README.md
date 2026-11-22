@@ -11,6 +11,17 @@ Render image and video previews as Braille and ASCII art in the terminal with xt
 
 Initially written for [`nnn`](https://github.com/jarun/nnn), it evolved as an independent feature-rich project.
 
+<table width="100%">
+    <tr>
+        <td width="50%"><img src="https://github.com/user-attachments/assets/81d8de38-540e-4fb6-8698-07e625f349c2" alt="image_01" width="100%"></td>
+        <td width="50%"><img src="https://github.com/user-attachments/assets/96320b6a-283b-4cab-b2ba-5ab04214673c" alt="image_02" width="100%"></td>
+    </tr>
+    <tr>
+        <td width="50%"><img src="https://github.com/user-attachments/assets/688e2f1c-7719-4d67-beb5-82c8eddec82e" alt="image_03" width="100%"></td>
+        <td width="50%"><img src="https://github.com/user-attachments/assets/9fc9a617-d55d-408b-81e9-450004f1644b" alt="image_04" width="100%"></td>
+    </tr>
+</table>
+
 ## Features
 
 - Braille art rendering for image and video previews
@@ -26,17 +37,6 @@ Initially written for [`nnn`](https://github.com/jarun/nnn), it evolved as an in
 - Rotate clockwise, flip horizontally
 - Bounded background preloading
 - Keyboard navigation and slideshow mode
-
-<table width="100%">
-    <tr>
-        <td width="50%"><img src="https://github.com/user-attachments/assets/81d8de38-540e-4fb6-8698-07e625f349c2" alt="image_01" width="100%"></td>
-        <td width="50%"><img src="https://github.com/user-attachments/assets/96320b6a-283b-4cab-b2ba-5ab04214673c" alt="image_02" width="100%"></td>
-    </tr>
-    <tr>
-        <td width="50%"><img src="https://github.com/user-attachments/assets/688e2f1c-7719-4d67-beb5-82c8eddec82e" alt="image_03" width="100%"></td>
-        <td width="50%"><img src="https://github.com/user-attachments/assets/9fc9a617-d55d-408b-81e9-450004f1644b" alt="image_04" width="100%"></td>
-    </tr>
-</table>
 
 #### Supported formats
 
